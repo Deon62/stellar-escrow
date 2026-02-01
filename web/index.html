@@ -67,6 +67,7 @@
     <!-- Step 3: Dashboard -->
     <section class="step" id="step-dashboard" data-step="3" hidden>
       <div class="step-inner step-dashboard-inner">
+        <!-- Header row -->
         <header class="dashboard-header">
           <div class="dashboard-meta">
             <span class="connected-badge small">
@@ -78,61 +79,50 @@
           <button type="button" id="differentContractBtn" class="btn btn-ghost btn-sm">Different contract</button>
         </header>
 
-        <div class="card state-card" id="stateCard">
-          <h2>Escrow state</h2>
-          <div class="state-grid">
-            <div class="state-item">
-              <span class="state-label">State</span>
-              <span id="stateValue" class="state-value"></span>
-            </div>
-            <div class="state-item">
-              <span class="state-label">Buyer</span>
-              <span id="buyerValue" class="state-value mono"></span>
-            </div>
-            <div class="state-item">
-              <span class="state-label">Seller</span>
-              <span id="sellerValue" class="state-value mono"></span>
-            </div>
-            <div class="state-item">
-              <span class="state-label">Amount</span>
-              <span id="amountValue" class="state-value"></span>
-            </div>
-            <div class="state-item">
-              <span class="state-label">Evidence</span>
-              <span id="evidenceValue" class="state-value"></span>
-            </div>
-          </div>
+        <!-- State bar (compact horizontal) -->
+        <div class="state-bar" id="stateCard">
+          <div class="state-item"><span class="state-label">State</span><span id="stateValue" class="state-value highlight"></span></div>
+          <div class="state-item"><span class="state-label">Buyer</span><span id="buyerValue" class="state-value mono"></span></div>
+          <div class="state-item"><span class="state-label">Seller</span><span id="sellerValue" class="state-value mono"></span></div>
+          <div class="state-item"><span class="state-label">Amount</span><span id="amountValue" class="state-value"></span></div>
+          <div class="state-item"><span class="state-label">Evidence</span><span id="evidenceValue" class="state-value"></span></div>
         </div>
 
-        <div class="card create-card">
-          <h2>Create escrow</h2>
-          <p class="hint">You must be the buyer. Enter seller, amount (stroops), and token contract.</p>
-          <div class="form-grid">
-            <label for="sellerInput">Seller address</label>
-            <input type="text" id="sellerInput" placeholder="G... or C..." />
+        <!-- Two-column layout: Create (left) + Actions (right) -->
+        <div class="dashboard-columns">
+          <!-- Left: Create escrow -->
+          <div class="card create-card">
+            <h3>Create escrow</h3>
+            <p class="hint">Buyer creates. Enter seller, amount, token.</p>
+            <label for="sellerInput">Seller</label>
+            <input type="text" id="sellerInput" placeholder="G... address" />
             <label for="amountInput">Amount (stroops)</label>
             <input type="number" id="amountInput" placeholder="10000000" min="1" />
-            <label for="tokenInput">Token contract address</label>
+            <label for="tokenInput">Token contract</label>
             <input type="text" id="tokenInput" placeholder="C..." />
+            <button type="button" id="createBtn" class="btn btn-primary btn-full">Create</button>
           </div>
-          <button type="button" id="createBtn" class="btn btn-primary">Create escrow</button>
-        </div>
 
-        <div class="card actions-card" id="actionsCard">
-          <h2>Actions</h2>
-          <div class="actions-grid">
-            <div class="action-block">
-              <p class="action-desc">Buyer: lock funds (approve token first).</p>
-              <button type="button" id="fundBtn" class="btn btn-primary">Fund escrow</button>
-            </div>
-            <div class="action-block">
-              <p class="action-desc">Seller: mark shipped and add evidence.</p>
-              <input type="text" id="evidenceInput" placeholder="Tracking or note" />
-              <button type="button" id="markShippedBtn" class="btn btn-primary">Mark shipped</button>
-            </div>
-            <div class="action-block">
-              <p class="action-desc">Buyer: confirm delivery → funds released to seller.</p>
-              <button type="button" id="confirmBtn" class="btn btn-success">Confirm delivery</button>
+          <!-- Right: Actions -->
+          <div class="card actions-card" id="actionsCard">
+            <h3>Actions</h3>
+            <div class="action-row">
+              <div class="action-block">
+                <span class="action-label">1. Fund</span>
+                <p class="action-hint">Buyer locks funds</p>
+                <button type="button" id="fundBtn" class="btn btn-primary btn-full">Fund escrow</button>
+              </div>
+              <div class="action-block">
+                <span class="action-label">2. Ship</span>
+                <p class="action-hint">Seller marks shipped</p>
+                <input type="text" id="evidenceInput" placeholder="Tracking #" />
+                <button type="button" id="markShippedBtn" class="btn btn-primary btn-full">Mark shipped</button>
+              </div>
+              <div class="action-block">
+                <span class="action-label">3. Confirm</span>
+                <p class="action-hint">Buyer releases funds</p>
+                <button type="button" id="confirmBtn" class="btn btn-success btn-full">Confirm delivery</button>
+              </div>
             </div>
           </div>
         </div>
