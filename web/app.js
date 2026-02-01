@@ -5,7 +5,7 @@
  */
 
 import { Server } from "@stellar/stellar-sdk/rpc";
-import { Contract, TransactionBuilder, Keypair, StrKey, Account, Address, nativeToScVal } from "@stellar/stellar-sdk";
+import { Contract, TransactionBuilder, Keypair, StrKey, Account, Address, nativeToScVal, scValToNative } from "@stellar/stellar-sdk";
 
 // Use proxy path in dev (Vite proxies /rpc → Stellar testnet RPC to bypass CORS)
 const RPC_URL = "/rpc";
@@ -214,26 +214,45 @@ function differentContract() {
 }
 
 // Build, sign with Freighter, send
+let isInvoking = false; // Prevent double-clicks
+
 async function invokeContract(methodName, args = []) {
+  if (isInvoking) {
+    showMessage("Transaction in progress, please wait...", "info");
+    return false;
+  }
+  isInvoking = true;
+  
+  // Disable all action buttons while transaction is in progress
+  const buttons = document.querySelectorAll("#createBtn, #fundBtn, #markShippedBtn, #confirmBtn");
+  buttons.forEach(b => b.disabled = true);
+  
   console.log("[invokeContract] method:", methodName, "args:", args);
   await loadStellarSdk();
   const freighter = getFreighter();
   if (!freighter?.signTransaction) {
     showMessage("Freighter is required to sign transactions.", "error");
+    isInvoking = false;
+    buttons.forEach(b => b.disabled = false);
     return false;
   }
   if (!walletPublicKey || !contractId) {
     showMessage("Connect wallet and set Contract ID.", "error");
+    isInvoking = false;
+    buttons.forEach(b => b.disabled = false);
     return false;
   }
   const server = new Server(RPC_URL, { allowHttp: true });
   const contract = new Contract(String(contractId));
   let account;
   try {
+    // Fetch fresh account to get current sequence number
     account = await server.getAccount(walletPublicKey);
-    console.log("[invokeContract] account loaded:", account.accountId());
+    console.log("[invokeContract] account loaded:", account.accountId(), "seq:", account.sequenceNumber());
   } catch (e) {
     showMessage("Account not found on network. Fund it first.", "error");
+    isInvoking = false;
+    buttons.forEach(b => b.disabled = false);
     return false;
   }
   
@@ -260,6 +279,7 @@ async function invokeContract(methodName, args = []) {
     // Simulate first
     const simulation = await server.simulateTransaction(tx);
     console.log("[invokeContract] simulation result:", simulation);
+    console.log("[invokeContract] simulation auth:", simulation.result?.auth);
     
     if (simulation.error) {
       throw new Error(simulation.error);
@@ -277,17 +297,53 @@ async function invokeContract(methodName, args = []) {
     const resourceFee = simulation.minResourceFee ? Number(simulation.minResourceFee) : 0;
     const totalFee = (baseFee + resourceFee).toString();
     
-    // Rebuild transaction with the original operation + soroban data
+    // Get auth entries from simulation (required for contract calls with require_auth)
+    const authEntries = simulation.result?.auth || [];
+    console.log("[invokeContract] auth entries count:", authEntries.length);
+    console.log("[invokeContract] auth entries:", authEntries);
+    if (authEntries.length > 0) {
+      console.log("[invokeContract] first auth entry type:", typeof authEntries[0]);
+      console.log("[invokeContract] first auth entry:", authEntries[0]);
+    }
+    
+    // Import Operation and xdr to rebuild with auth
+    const { Operation, xdr } = await import("@stellar/stellar-sdk");
+    
+    // Get the original invoke_host_function details from our operation
+    const originalOp = op.body().invokeHostFunctionOp();
+    const hostFunc = originalOp.hostFunction();
+    
+    // Parse auth entries - they might be base64 strings or already XDR objects
+    const parsedAuth = authEntries.map(a => {
+      if (typeof a === 'string') {
+        return xdr.SorobanAuthorizationEntry.fromXDR(a, 'base64');
+      } else if (a.toXDR) {
+        // Already an XDR object
+        return a;
+      } else {
+        console.log("[invokeContract] unknown auth entry format:", a);
+        return a;
+      }
+    });
+    console.log("[invokeContract] parsed auth entries:", parsedAuth);
+    
+    // Create new operation with auth from simulation
+    const opWithAuth = Operation.invokeHostFunction({
+      func: hostFunc,
+      auth: parsedAuth,
+    });
+    
+    // Rebuild transaction with auth-enabled operation + soroban data
     const preparedBuilder = new TransactionBuilder(account, {
       fee: totalFee,
       networkPassphrase: NETWORK_PASSPHRASE,
     })
-      .addOperation(op)  // Use original operation from contract.call()
+      .addOperation(opWithAuth)
       .setTimeout(180)
       .setSorobanData(sorobanData);
     
     prepared = preparedBuilder.build();
-    console.log("[invokeContract] transaction prepared, fee:", totalFee);
+    console.log("[invokeContract] transaction prepared with auth, fee:", totalFee);
   } catch (e) {
     console.error("[invokeContract] Simulation/prepare failed:", e);
     showMessage("Simulation failed: " + (e?.message || e), "error");
@@ -297,18 +353,88 @@ async function invokeContract(methodName, args = []) {
   const xdr = prepared.toXDR();
   let signedXdr;
   try {
-    signedXdr = await freighter.signTransaction(xdr, { networkPassphrase: NETWORK_PASSPHRASE });
-    console.log("[invokeContract] transaction signed");
+    console.log("[invokeContract] calling signTransaction with xdr length:", xdr.length);
+    const signResult = await freighter.signTransaction(xdr, { networkPassphrase: NETWORK_PASSPHRASE });
+    console.log("[invokeContract] sign result type:", typeof signResult);
+    console.log("[invokeContract] sign result:", JSON.stringify(signResult, null, 2));
+    console.log("[invokeContract] sign result keys:", signResult ? Object.keys(signResult) : "null");
+    
+    // Freighter may return different formats depending on version
+    if (typeof signResult === "string") {
+      signedXdr = signResult;
+    } else if (signResult?.signedTxXdr) {
+      signedXdr = signResult.signedTxXdr;
+    } else if (signResult?.xdr) {
+      signedXdr = signResult.xdr;
+    } else if (signResult?.signedXDR) {
+      signedXdr = signResult.signedXDR;
+    } else if (signResult?.signed) {
+      signedXdr = signResult.signed;
+    }
+    
+    if (!signedXdr || typeof signedXdr !== "string") {
+      console.error("[invokeContract] Could not extract XDR from:", signResult);
+      throw new Error("No signed XDR returned from Freighter");
+    }
+    console.log("[invokeContract] transaction signed, xdr length:", signedXdr.length);
   } catch (e) {
     console.error("[invokeContract] Signing failed:", e);
-    showMessage("Signing cancelled or failed.", "error");
+    showMessage("Signing cancelled or failed: " + (e?.message || e), "error");
     return false;
   }
   
-  const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+  let signedTx;
+  try {
+    signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+    console.log("[invokeContract] signed tx parsed");
+  } catch (e) {
+    console.error("[invokeContract] Failed to parse signed XDR:", e);
+    showMessage("Failed to parse signed transaction.", "error");
+    return false;
+  }
   try {
     const sendResult = await server.sendTransaction(signedTx);
     console.log("[invokeContract] transaction sent:", sendResult);
+    console.log("[invokeContract] send status:", sendResult.status);
+    if (sendResult.errorResult) {
+      console.log("[invokeContract] errorResult:", sendResult.errorResult);
+      try {
+        // Try to get more details from the error
+        const errorXdr = sendResult.errorResult.toXDR?.("base64") || sendResult.errorResult;
+        console.log("[invokeContract] error XDR:", errorXdr);
+        // Try to get result code
+        if (sendResult.errorResult._attributes) {
+          console.log("[invokeContract] error attributes:", sendResult.errorResult._attributes);
+        }
+        // Get the result code name
+        const resultCode = sendResult.errorResult.result?.()?.switch?.()?.name;
+        console.log("[invokeContract] result code:", resultCode);
+      } catch (e) {
+        console.log("[invokeContract] could not decode error:", e);
+      }
+    }
+    
+    // Also log the hash so user can check on explorer
+    if (sendResult.hash) {
+      console.log("[invokeContract] Check tx on explorer: https://stellar.expert/explorer/testnet/tx/" + sendResult.hash);
+    }
+    
+    if (sendResult.status === "ERROR") {
+      // Transaction failed immediately - check for specific error types
+      const resultCode = sendResult.errorResult?.result?.()?.switch?.()?.name;
+      console.log("[invokeContract] Error result code:", resultCode);
+      
+      if (resultCode === "txBadSeq") {
+        // Sequence error - wait and let the user retry manually
+        // The sequence has probably been incremented by a previous tx
+        showMessage("Sequence out of sync. Refreshing account - click the button again.", "error");
+        // Don't return false yet - let finally block clean up
+      } else {
+        const errMsg = resultCode || sendResult.errorResult?.toString?.() || "Transaction rejected";
+        showMessage("Transaction failed: " + errMsg, "error");
+      }
+      return false;
+    }
     
     if (sendResult.status === "PENDING" || sendResult.status === "TRY_AGAIN_LATER") {
       showMessage(`Transaction submitted, waiting for confirmation...`, "info");
@@ -344,7 +470,12 @@ async function invokeContract(methodName, args = []) {
   } catch (e) {
     console.error("[invokeContract] Send failed:", e);
     showMessage("Send failed: " + (e?.message || e), "error");
+    isInvoking = false;
+    buttons.forEach(b => b.disabled = false);
     return false;
+  } finally {
+    isInvoking = false;
+    buttons.forEach(b => b.disabled = false);
   }
 }
 
@@ -450,7 +581,11 @@ async function loadEscrow() {
     let notInitialized = false;
 
     try {
-      state = await simulateContract("get_state", [], resolvedId).then((v) => (v !== undefined ? Number(v) : null));
+      const stateResult = await simulateContract("get_state", [], resolvedId);
+      // Convert ScVal to native JS value
+      const stateNative = stateResult ? scValToNative(stateResult) : null;
+      state = typeof stateNative === 'number' ? stateNative : (stateNative?.value ?? null);
+      console.log("[loadEscrow] state result:", stateResult, "native:", stateNative, "final:", state);
     } catch (stateErr) {
       const stateMsg = stateErr?.message ?? "";
       if (stateMsg.includes("not initialized") || stateMsg.includes("UnreachableCodeReached") || stateMsg.includes("InvalidAction")) {
@@ -468,10 +603,26 @@ async function loadEscrow() {
         simulateContract("get_amount", [], resolvedId),
         simulateContract("get_evidence", [], resolvedId),
       ]);
-      buyer = results[0].status === "fulfilled" ? (results[0].value?.toString?.() ?? String(results[0].value)) : "—";
-      seller = results[1].status === "fulfilled" ? (results[1].value?.toString?.() ?? String(results[1].value)) : "—";
-      amount = results[2].status === "fulfilled" ? String(results[2].value) : "—";
-      evidence = results[3].status === "fulfilled" ? String(results[3].value) : "—";
+      
+      // Convert ScVal results to native values
+      if (results[0].status === "fulfilled" && results[0].value) {
+        const buyerNative = scValToNative(results[0].value);
+        buyer = typeof buyerNative === 'string' ? buyerNative : (buyerNative?.toString?.() ?? "—");
+      }
+      if (results[1].status === "fulfilled" && results[1].value) {
+        const sellerNative = scValToNative(results[1].value);
+        seller = typeof sellerNative === 'string' ? sellerNative : (sellerNative?.toString?.() ?? "—");
+      }
+      if (results[2].status === "fulfilled" && results[2].value) {
+        const amountNative = scValToNative(results[2].value);
+        amount = String(amountNative);
+      }
+      if (results[3].status === "fulfilled" && results[3].value) {
+        const evidenceNative = scValToNative(results[3].value);
+        evidence = typeof evidenceNative === 'string' ? evidenceNative : (evidenceNative?.toString?.() ?? "—");
+      }
+      
+      console.log("[loadEscrow] parsed values:", { state, buyer, seller, amount, evidence });
     }
 
     setEl("stateValue", notInitialized ? "Not initialized" : (state != null ? STATE_NAMES[state] ?? state : "—"));
