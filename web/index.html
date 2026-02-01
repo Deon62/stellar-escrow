@@ -38,9 +38,12 @@
     <section class="step step-active" id="step-welcome" data-step="1">
       <div class="step-inner step-welcome-inner">
         <h1 class="welcome-logo">Lumenswags</h1>
-        <p class="welcome-tagline">Secure escrow for Stellar merch. Pay, ship, confirm — on-chain.</p>
+        <p class="welcome-tagline">Secure escrow for Stellar merch. Pay, ship, confirm  on-chain.</p>
         <p class="welcome-sub">Connect your wallet to get started.</p>
-        <button type="button" id="connectBtn" class="btn btn-primary btn-hero">Connect wallet</button>
+        <div class="welcome-actions">
+          <button type="button" id="connectBtn" class="btn btn-primary btn-hero">Connect wallet</button>
+          <button type="button" id="disconnectBtn" class="btn btn-ghost btn-sm" hidden>Disconnect</button>
+        </div>
         <p class="welcome-hint">Requires Freighter or another Stellar wallet.</p>
       </div>
     </section>
@@ -56,7 +59,7 @@
         <p class="step-desc">Paste the Lumenswags escrow contract ID to view and manage it.</p>
         <label for="contractId" class="sr-only">Contract ID</label>
         <input type="text" id="contractId" class="input-contract" placeholder="C... (56 chars: A–Z and 2–7)" autocomplete="off" inputmode="text" spellcheck="false" size="56" />
-        <p class="input-hint">56 characters: letters A–Z and digits 2, 3, 4, 5, 6, 7. Paste the full ID (no max length so nothing is cut off).</p>
+        <p class="input-hint">Paste the full 56-character contract ID (starts with C).</p>
         <div class="step-actions">
           <button type="button" id="backToWelcomeBtn" class="btn btn-ghost">Back</button>
           <button type="button" id="loadBtn" class="btn btn-primary">Load escrow</button>
@@ -76,7 +79,10 @@
             </span>
             <span class="contract-badge" id="contractIdShort">C…</span>
           </div>
-          <button type="button" id="differentContractBtn" class="btn btn-ghost btn-sm">Different contract</button>
+          <div class="dashboard-actions">
+            <button type="button" id="differentContractBtn" class="btn btn-ghost btn-sm">Different contract</button>
+            <button type="button" id="disconnectDashboardBtn" class="btn btn-ghost btn-sm">Disconnect</button>
+          </div>
         </header>
 
         <!-- State bar (compact horizontal) -->
