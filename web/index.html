@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumenswags — Stellar Merch Escrow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Freighter API: load before app so window.freighterApi is available (extension must be installed) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/stellar-freighter-api/5.0.0/index.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Progress stepper (steps 2 & 3) -->
+    <nav class="stepper" id="stepper" aria-label="Progress" hidden>
+      <ol class="stepper-list">
+        <li class="stepper-item" data-step="1">
+          <span class="stepper-dot" aria-current="false"></span>
+          <span class="stepper-label">Connect</span>
+        </li>
+        <li class="stepper-item" data-step="2">
+          <span class="stepper-line"></span>
+          <span class="stepper-dot" aria-current="false"></span>
+          <span class="stepper-label">Contract</span>
+        </li>
+        <li class="stepper-item" data-step="3">
+          <span class="stepper-line"></span>
+          <span class="stepper-dot" aria-current="false"></span>
+          <span class="stepper-label">Escrow</span>
+        </li>
+      </ol>
+    </nav>
+
+    <!-- Step 1: Welcome -->
+    <section class="step step-active" id="step-welcome" data-step="1">
+      <div class="step-inner step-welcome-inner">
+        <h1 class="welcome-logo">Lumenswags</h1>
+        <p class="welcome-tagline">Secure escrow for Stellar merch. Pay, ship, confirm — on-chain.</p>
+        <p class="welcome-sub">Connect your wallet to get started.</p>
+        <button type="button" id="connectBtn" class="btn btn-primary btn-hero">Connect wallet</button>
+        <p class="welcome-hint">Requires Freighter or another Stellar wallet.</p>
+      </div>
+    </section>
+
+    <!-- Step 2: Contract ID -->
+    <section class="step" id="step-contract" data-step="2" hidden>
+      <div class="step-inner step-contract-inner">
+        <div class="connected-badge" id="connectedBadge">
+          <span class="connected-dot"></span>
+          <span id="walletAddress" class="wallet-address">G…xyz</span>
+        </div>
+        <h2 class="step-title">Enter contract</h2>
+        <p class="step-desc">Paste the Lumenswags escrow contract ID to view and manage it.</p>
+        <label for="contractId" class="sr-only">Contract ID</label>
+        <input type="text" id="contractId" class="input-contract" placeholder="C..." autocomplete="off" />
+        <div class="step-actions">
+          <button type="button" id="backToWelcomeBtn" class="btn btn-ghost">Back</button>
+          <button type="button" id="loadBtn" class="btn btn-primary">Load escrow</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Dashboard -->
+    <section class="step" id="step-dashboard" data-step="3" hidden>
+      <div class="step-inner step-dashboard-inner">
+        <header class="dashboard-header">
+          <div class="dashboard-meta">
+            <span class="connected-badge small">
+              <span class="connected-dot"></span>
+              <span id="walletAddressDashboard" class="wallet-address"></span>
+            </span>
+            <span class="contract-badge" id="contractIdShort">C…</span>
+          </div>
+          <button type="button" id="differentContractBtn" class="btn btn-ghost btn-sm">Different contract</button>
+        </header>
+
+        <div class="card state-card" id="stateCard">
+          <h2>Escrow state</h2>
+          <div class="state-grid">
+            <div class="state-item">
+              <span class="state-label">State</span>
+              <span id="stateValue" class="state-value"></span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Buyer</span>
+              <span id="buyerValue" class="state-value mono"></span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Seller</span>
+              <span id="sellerValue" class="state-value mono"></span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Amount</span>
+              <span id="amountValue" class="state-value"></span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Evidence</span>
+              <span id="evidenceValue" class="state-value"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card create-card">
+          <h2>Create escrow</h2>
+          <p class="hint">You must be the buyer. Enter seller, amount (stroops), and token contract.</p>
+          <div class="form-grid">
+            <label for="sellerInput">Seller address</label>
+            <input type="text" id="sellerInput" placeholder="G... or C..." />
+            <label for="amountInput">Amount (stroops)</label>
+            <input type="number" id="amountInput" placeholder="10000000" min="1" />
+            <label for="tokenInput">Token contract address</label>
+            <input type="text" id="tokenInput" placeholder="C..." />
+          </div>
+          <button type="button" id="createBtn" class="btn btn-primary">Create escrow</button>
+        </div>
+
+        <div class="card actions-card" id="actionsCard">
+          <h2>Actions</h2>
+          <div class="actions-grid">
+            <div class="action-block">
+              <p class="action-desc">Buyer: lock funds (approve token first).</p>
+              <button type="button" id="fundBtn" class="btn btn-primary">Fund escrow</button>
+            </div>
+            <div class="action-block">
+              <p class="action-desc">Seller: mark shipped and add evidence.</p>
+              <input type="text" id="evidenceInput" placeholder="Tracking or note" />
+              <button type="button" id="markShippedBtn" class="btn btn-primary">Mark shipped</button>
+            </div>
+            <div class="action-block">
+              <p class="action-desc">Buyer: confirm delivery → funds released to seller.</p>
+              <button type="button" id="confirmBtn" class="btn btn-success">Confirm delivery</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
