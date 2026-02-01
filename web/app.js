@@ -189,7 +189,7 @@ async function invokeContract(methodName, args = [], retryCount = 0) {
   }
   isInvoking = true;
   
-  const buttons = document.querySelectorAll("#createBtn, #fundBtn, #markShippedBtn, #confirmBtn");
+  const buttons = document.querySelectorAll("#createBtn, #approveBtn, #fundBtn, #markShippedBtn, #confirmBtn");
   buttons.forEach(b => b.disabled = true);
   
   const freighter = getFreighter();
@@ -442,6 +442,59 @@ async function createEscrow() {
   }
 }
 
+async function approveTokens() {
+  // Get the token and amount from the current escrow
+  const amountEl = document.getElementById("amountValue");
+  const tokenEl = document.getElementById("tokenInput");
+  
+  const amountStr = amountEl?.textContent?.trim();
+  const tokenAddress = tokenEl?.value?.trim() || TESTNET_XLM_TOKEN;
+  
+  if (!amountStr || amountStr === "—") {
+    showMessage("Load an escrow first to see the amount.", "error");
+    return;
+  }
+  
+  const amount = BigInt(amountStr);
+  if (amount <= 0n) {
+    showMessage("Invalid amount.", "error");
+    return;
+  }
+  
+  // Approve with some buffer (2x amount) and reasonable expiration (~1 week)
+  const approveAmount = amount * 2n;
+  // Get current ledger and add ~200000 (~1 week on testnet)
+  const server = new Server(RPC_URL, { allowHttp: true });
+  let expirationLedger;
+  try {
+    const health = await server.getHealth();
+    expirationLedger = (health.latestLedger || 3000000) + 200000;
+  } catch {
+    expirationLedger = 3200000; // Fallback
+  }
+  
+  // Call the token contract's approve function
+  const args = [
+    new Address(walletPublicKey).toScVal(),           // from (buyer)
+    new Address(contractId).toScVal(),                 // spender (escrow contract)
+    nativeToScVal(approveAmount, { type: "i128" }),    // amount
+    nativeToScVal(expirationLedger, { type: "u32" }),  // expiration_ledger
+  ];
+  
+  // Temporarily set contractId to token contract for this call
+  const originalContractId = contractId;
+  contractId = tokenAddress;
+  
+  const success = await invokeContract("approve", args);
+  
+  // Restore escrow contract ID
+  contractId = originalContractId;
+  
+  if (success) {
+    showMessage("Tokens approved! Now click 'Fund escrow'.", "success");
+  }
+}
+
 async function fundEscrow() {
   if (await invokeContract("fund", [])) await loadEscrow();
 }
@@ -471,6 +524,7 @@ function init() {
   document.getElementById("loadBtn")?.addEventListener("click", loadEscrow);
   document.getElementById("differentContractBtn")?.addEventListener("click", goToDifferentContract);
   document.getElementById("createBtn")?.addEventListener("click", createEscrow);
+  document.getElementById("approveBtn")?.addEventListener("click", approveTokens);
   document.getElementById("fundBtn")?.addEventListener("click", fundEscrow);
   document.getElementById("markShippedBtn")?.addEventListener("click", markShipped);
   document.getElementById("confirmBtn")?.addEventListener("click", confirmDelivery);
