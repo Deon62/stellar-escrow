@@ -5,11 +5,14 @@
  */
 
 import { Server } from "@stellar/stellar-sdk/rpc";
-import { Contract, TransactionBuilder, Keypair, StrKey, Account } from "@stellar/stellar-sdk";
+import { Contract, TransactionBuilder, Keypair, StrKey, Account, Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 // Use proxy path in dev (Vite proxies /rpc → Stellar testnet RPC to bypass CORS)
 const RPC_URL = "/rpc";
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+
+// Testnet native XLM token contract (wrapped XLM for Soroban)
+const TESTNET_XLM_TOKEN = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
 const STATE_NAMES = { 0: "Created", 1: "Funded", 2: "Shipped", 3: "Released" };
 
@@ -212,54 +215,136 @@ function differentContract() {
 
 // Build, sign with Freighter, send
 async function invokeContract(methodName, args = []) {
+  console.log("[invokeContract] method:", methodName, "args:", args);
   await loadStellarSdk();
   const freighter = getFreighter();
   if (!freighter?.signTransaction) {
     showMessage("Freighter is required to sign transactions.", "error");
-    return;
+    return false;
   }
   if (!walletPublicKey || !contractId) {
     showMessage("Connect wallet and set Contract ID.", "error");
-    return;
+    return false;
   }
   const server = new Server(RPC_URL, { allowHttp: true });
   const contract = new Contract(String(contractId));
   let account;
   try {
     account = await server.getAccount(walletPublicKey);
+    console.log("[invokeContract] account loaded:", account.accountId());
   } catch (e) {
     showMessage("Account not found on network. Fund it first.", "error");
-    return;
+    return false;
   }
-  const op = contract.call(methodName, ...args);
-  const tx = new TransactionBuilder(account, {
-    fee: "10000",
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(op)
-    .setTimeout(180)
-    .build();
+  
+  let op, tx;
+  try {
+    op = contract.call(methodName, ...args);
+    console.log("[invokeContract] operation created");
+    tx = new TransactionBuilder(account, {
+      fee: "10000",
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(op)
+      .setTimeout(180)
+      .build();
+    console.log("[invokeContract] transaction built, hash:", tx.hash().toString("hex"));
+  } catch (e) {
+    console.error("[invokeContract] Failed to build transaction:", e);
+    showMessage("Failed to build transaction: " + (e?.message || e), "error");
+    return false;
+  }
+  
   let prepared;
   try {
-    prepared = await server.prepareTransaction(tx);
+    // Simulate first
+    const simulation = await server.simulateTransaction(tx);
+    console.log("[invokeContract] simulation result:", simulation);
+    
+    if (simulation.error) {
+      throw new Error(simulation.error);
+    }
+    
+    if (!simulation.transactionData) {
+      throw new Error("Simulation did not return transactionData");
+    }
+    
+    // Build the soroban data from simulation
+    const sorobanData = simulation.transactionData.build();
+    
+    // Calculate fee: base fee + resource fee from simulation
+    const baseFee = 10000;
+    const resourceFee = simulation.minResourceFee ? Number(simulation.minResourceFee) : 0;
+    const totalFee = (baseFee + resourceFee).toString();
+    
+    // Rebuild transaction with the original operation + soroban data
+    const preparedBuilder = new TransactionBuilder(account, {
+      fee: totalFee,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(op)  // Use original operation from contract.call()
+      .setTimeout(180)
+      .setSorobanData(sorobanData);
+    
+    prepared = preparedBuilder.build();
+    console.log("[invokeContract] transaction prepared, fee:", totalFee);
   } catch (e) {
+    console.error("[invokeContract] Simulation/prepare failed:", e);
     showMessage("Simulation failed: " + (e?.message || e), "error");
-    return;
+    return false;
   }
+  
   const xdr = prepared.toXDR();
   let signedXdr;
   try {
-    signedXdr = await freighter.signTransaction(xdr, NETWORK_PASSPHRASE);
+    signedXdr = await freighter.signTransaction(xdr, { networkPassphrase: NETWORK_PASSPHRASE });
+    console.log("[invokeContract] transaction signed");
   } catch (e) {
+    console.error("[invokeContract] Signing failed:", e);
     showMessage("Signing cancelled or failed.", "error");
-    return;
+    return false;
   }
+  
   const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
   try {
-    await server.sendTransaction(signedTx);
-    showMessage(`Transaction submitted: ${methodName}`, "success");
+    const sendResult = await server.sendTransaction(signedTx);
+    console.log("[invokeContract] transaction sent:", sendResult);
+    
+    if (sendResult.status === "PENDING" || sendResult.status === "TRY_AGAIN_LATER") {
+      showMessage(`Transaction submitted, waiting for confirmation...`, "info");
+      // Poll for result
+      const hash = sendResult.hash;
+      let attempts = 0;
+      while (attempts < 30) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          const txResult = await server.getTransaction(hash);
+          console.log("[invokeContract] poll result:", txResult.status);
+          if (txResult.status === "SUCCESS") {
+            showMessage(`${methodName} succeeded!`, "success");
+            return true;
+          } else if (txResult.status === "FAILED") {
+            showMessage(`${methodName} failed on-chain.`, "error");
+            return false;
+          }
+        } catch (pollErr) {
+          // Not found yet, keep polling
+        }
+        attempts++;
+      }
+      showMessage("Transaction timeout - check explorer.", "error");
+      return false;
+    } else if (sendResult.status === "SUCCESS") {
+      showMessage(`${methodName} succeeded!`, "success");
+      return true;
+    } else {
+      showMessage(`Transaction status: ${sendResult.status}`, "error");
+      return false;
+    }
   } catch (e) {
+    console.error("[invokeContract] Send failed:", e);
     showMessage("Send failed: " + (e?.message || e), "error");
+    return false;
   }
 }
 
@@ -422,31 +507,68 @@ async function loadEscrow() {
 }
 
 async function createEscrow() {
-  const seller = document.getElementById("sellerInput").value?.trim();
-  const amount = document.getElementById("amountInput").value?.trim();
-  const token = document.getElementById("tokenInput").value?.trim();
-  if (!seller || !amount || !token) {
-    showMessage("Fill seller, amount, and token address.", "error");
+  const sellerInput = document.getElementById("sellerInput").value?.trim();
+  const amountInput = document.getElementById("amountInput").value?.trim();
+  let tokenInput = document.getElementById("tokenInput").value?.trim();
+  
+  // Default to testnet XLM token if empty
+  if (!tokenInput) {
+    tokenInput = TESTNET_XLM_TOKEN;
+    document.getElementById("tokenInput").value = TESTNET_XLM_TOKEN;
+  }
+  
+  if (!sellerInput || !amountInput) {
+    showMessage("Fill seller address and amount.", "error");
     return;
   }
-  await invokeContract("create", [walletPublicKey, seller, amount, token]);
-  setTimeout(() => loadEscrow(), 2000);
+  
+  // Validate addresses
+  if (!StrKey.isValidEd25519PublicKey(sellerInput) && !StrKey.isValidContract(sellerInput)) {
+    showMessage("Invalid seller address. Use G... (account) or C... (contract).", "error");
+    return;
+  }
+  if (!StrKey.isValidContract(tokenInput)) {
+    showMessage("Invalid token contract. Must start with C and be 56 characters.", "error");
+    return;
+  }
+  
+  const amountNum = BigInt(amountInput);
+  if (amountNum <= 0n) {
+    showMessage("Amount must be a positive number.", "error");
+    return;
+  }
+  
+  // Convert all arguments to ScVal for Soroban
+  const buyerScVal = new Address(walletPublicKey).toScVal();
+  const sellerScVal = new Address(sellerInput).toScVal();
+  const amountScVal = nativeToScVal(amountNum, { type: "i128" });
+  const tokenScVal = new Address(tokenInput).toScVal();
+  
+  console.log("[createEscrow] ScVal args:", { buyerScVal, sellerScVal, amountScVal, tokenScVal });
+  
+  const success = await invokeContract("create", [buyerScVal, sellerScVal, amountScVal, tokenScVal]);
+  if (success) {
+    // Reload escrow state after successful creation
+    await loadEscrow();
+  }
 }
 
 async function fundEscrow() {
-  await invokeContract("fund");
-  setTimeout(() => loadEscrow(), 2000);
+  const success = await invokeContract("fund", []);
+  if (success) await loadEscrow();
 }
 
 async function markShipped() {
   const evidence = document.getElementById("evidenceInput").value?.trim() || "Shipped";
-  await invokeContract("mark_shipped", [evidence]);
-  setTimeout(() => loadEscrow(), 2000);
+  // Convert string to ScVal
+  const evidenceScVal = nativeToScVal(evidence, { type: "string" });
+  const success = await invokeContract("mark_shipped", [evidenceScVal]);
+  if (success) await loadEscrow();
 }
 
 async function confirmDelivery() {
-  await invokeContract("confirm_delivery");
-  setTimeout(() => loadEscrow(), 2000);
+  const success = await invokeContract("confirm_delivery", []);
+  if (success) await loadEscrow();
 }
 
 function bindButtons() {
