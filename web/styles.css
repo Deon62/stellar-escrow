@@ -151,6 +151,11 @@ body {
   max-width: 420px;
 }
 
+/* Contract step: wider so 56-char ID is fully visible */
+.step-contract-inner {
+  max-width: 580px;
+}
+
 /* Step 1: Welcome */
 .step-welcome-inner {
   text-align: center;
@@ -216,17 +221,37 @@ body {
   margin: 0 0 1.25rem;
 }
 
+.input-hint {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin: 0.35rem 0 0;
+}
+
 .input-contract {
-  font-family: var(--font);
-  font-size: 1rem;
+  font-family: ui-monospace, "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
   width: 100%;
-  padding: 0.85rem 1rem;
+  min-width: 520px;
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
   border: 1px solid rgba(29, 53, 87, 0.18);
   border-radius: var(--radius);
   background: #fff;
   color: var(--text);
   margin-bottom: 1.25rem;
   transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  display: block;
+}
+
+@media (max-width: 560px) {
+  .input-contract {
+    min-width: 0;
+  }
+  .step-contract-inner {
+    max-width: 100%;
+  }
 }
 
 .input-contract::placeholder {
@@ -319,6 +344,28 @@ body {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-loading {
+  pointer-events: none;
+}
+
+.btn-loading .btn-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.5em;
+  vertical-align: -0.2em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .btn-primary {

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lumenswags — Stellar Merch Escrow</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -54,7 +55,8 @@
         <h2 class="step-title">Enter contract</h2>
         <p class="step-desc">Paste the Lumenswags escrow contract ID to view and manage it.</p>
         <label for="contractId" class="sr-only">Contract ID</label>
-        <input type="text" id="contractId" class="input-contract" placeholder="C..." autocomplete="off" />
+        <input type="text" id="contractId" class="input-contract" placeholder="C... (56 chars: A–Z and 2–7)" autocomplete="off" inputmode="text" spellcheck="false" size="56" />
+        <p class="input-hint">56 characters: letters A–Z and digits 2, 3, 4, 5, 6, 7. Paste the full ID (no max length so nothing is cut off).</p>
         <div class="step-actions">
           <button type="button" id="backToWelcomeBtn" class="btn btn-ghost">Back</button>
           <button type="button" id="loadBtn" class="btn btn-primary">Load escrow</button>
