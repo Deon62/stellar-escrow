@@ -35,16 +35,18 @@
     </nav>
 
     <!-- Step 1: Welcome -->
-    <section class="step step-active" id="step-welcome" data-step="1">
-      <div class="step-inner step-welcome-inner">
-        <h1 class="welcome-logo">Lumenswags</h1>
-        <p class="welcome-tagline">Secure escrow for Stellar merch. Pay, ship, confirm  on-chain.</p>
-        <p class="welcome-sub">Connect your wallet to get started.</p>
-        <div class="welcome-actions">
-          <button type="button" id="connectBtn" class="btn btn-primary btn-hero">Connect wallet</button>
-          <button type="button" id="disconnectBtn" class="btn btn-ghost btn-sm" hidden>Disconnect</button>
+    <section class="step step-active step-welcome" id="step-welcome" data-step="1">
+      <div class="step-welcome-inner">
+        <div class="welcome-content">
+          <h1 class="welcome-logo">Lumenswags</h1>
+          <p class="welcome-subhero">Lumenswags is an on-chain escrow for buying and selling Stellar merchandise. As the buyer, you lock funds in a smart contract. The seller ships and adds proof. When you confirm delivery, funds are released to the seller — no middleman, fully transparent.</p>
+          <p class="welcome-sub">Connect your wallet to get started.</p>
+          <div class="welcome-actions">
+            <button type="button" id="connectBtn" class="btn btn-primary btn-hero">Connect wallet</button>
+            <button type="button" id="disconnectBtn" class="btn btn-ghost btn-sm" hidden>Disconnect</button>
+          </div>
+          <p class="welcome-hint">Requires Freighter or another Stellar wallet.</p>
         </div>
-        <p class="welcome-hint">Requires Freighter or another Stellar wallet.</p>
       </div>
     </section>
 
