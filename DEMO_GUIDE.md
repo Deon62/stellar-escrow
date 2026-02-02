@@ -1,52 +1,14 @@
-# Lumenswags Escrow Demo Guide
+# Lumenswags Escrow - Demo Guide
 
-This guide walks you through testing the Lumenswags escrow contract on Stellar testnet.
-
-## Overview
-
-The escrow contract enables secure peer-to-peer transactions:
-1. **Buyer** creates an escrow with seller details and payment amount
-2. **Buyer** funds the escrow (tokens locked in contract)
-3. **Seller** marks the order as shipped with tracking evidence
-4. **Buyer** confirms delivery → funds released to seller
+A step-by-step guide to test the escrow flow using the web UI.
 
 ## Prerequisites
 
-### 1. Install Freighter Wallet
-- Install the [Freighter browser extension](https://www.freighter.app/)
-- Create **TWO separate wallets** (or use two browser profiles):
-  - **Wallet A** = Buyer
-  - **Wallet B** = Seller
+1. **Freighter Wallet** - Install from [freighter.app](https://www.freighter.app/)
+2. **Testnet Account** - Create and fund via [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test)
+3. **Node.js** - For running the dev server
 
-### 2. Fund Your Wallets
-Each wallet needs testnet XLM. Use the [Stellar Friendbot](https://laboratory.stellar.org/#account-creator?network=test):
-1. Copy your wallet's public address (starts with `G...`)
-2. Paste into Friendbot and click "Get test network lumens"
-3. Repeat for both wallets
-
-### 3. Note Your Addresses
-Write down both addresses:
-```
-BUYER ADDRESS:  G..............(your Wallet A)
-SELLER ADDRESS: G..............(your Wallet B)
-```
-
----
-
-## Contract Information
-
-| Item | Value |
-|------|-------|
-| **New Contract ID** | `CD5UVXKL72326LKWWVNBTRZZIPKGUESEEUE4ARUZMK53IKDSYKJBHOUK` |
-| **Testnet XLM Token** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| **Network** | Stellar Testnet |
-| **RPC** | `https://soroban-testnet.stellar.org` |
-
----
-
-## Step-by-Step Demo
-
-### Step 1: Start the Web UI
+## Quick Start
 
 ```bash
 cd web
@@ -54,233 +16,114 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5500 in your browser.
+Open http://localhost:5500
 
----
+## Latest Deployed Contract
 
-### Step 2: Connect Buyer Wallet (Wallet A)
-
-1. Make sure **Wallet A (Buyer)** is active in Freighter
-2. Click **"Connect wallet"** on the welcome page
-3. Approve the connection in Freighter
-4. You'll see your shortened address displayed
-
----
-
-### Step 3: Load the Contract
-
-1. Paste the contract ID:
-   ```
-   CD5UVXKL72326LKWWVNBTRZZIPKGUESEEUE4ARUZMK53IKDSYKJBHOUK
-   ```
-2. Click **"Load escrow"**
-3. You should see **State: Not initialized**
-
----
-
-### Step 4: Create Escrow (Buyer Action)
-
-Fill in the **Create escrow** form:
-
-| Field | Value |
-|-------|-------|
-| **Seller** | Your **Wallet B** address (G...) |
-| **Amount (stroops)** | `10000000` (= 1 XLM) |
-| **Token** | Already filled with testnet XLM |
-
-Click **"Create"** and approve in Freighter.
-
-**Expected result:** State changes to **"Created"**
-
----
-
-### Step 5: Approve Token Spending (Buyer Action)
-
-Before funding, the buyer must approve the escrow contract to spend their tokens.
-
-**Option A: Via Stellar CLI**
-```bash
-stellar contract invoke \
-  --id CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
-  --source <YOUR_BUYER_KEY_ALIAS> \
-  --network testnet-gateway \
-  -- approve \
-  --from <BUYER_ADDRESS> \
-  --spender CD5UVXKL72326LKWWVNBTRZZIPKGUESEEUE4ARUZMK53IKDSYKJBHOUK \
-  --amount 100000000 \
-  --expiration_ledger 1000000
+```
+CAKIIMRZ57JQFOXAZENGUOPFF4UXN2EPYJZUP43PGU5DGUN4SSK2NQ3M
 ```
 
-**Option B: Via Stellar Laboratory**
-1. Go to https://laboratory.stellar.org/
-2. Use Transaction Builder to call `approve` on the XLM token contract
+## Complete Demo Flow (5 Steps)
 
----
+### Step A: Generate Demo Seller
+1. Click **"Generate & Fund Seller"**
+2. Wait for Friendbot to fund the account
+3. Seller address auto-fills in the form
 
-### Step 6: Fund Escrow (Buyer Action)
+### Step B: Create Escrow
+1. Seller address is already filled from Step A
+2. Enter amount (default: 1000 stroops)
+3. Click **"Create Escrow"**
+4. Confirm in Freighter
 
-1. Ensure **Wallet A (Buyer)** is connected
-2. Click **"Fund escrow"**
-3. Approve in Freighter
+### Step C: Approve & Fund
+1. Click **"Approve Tokens"** → Confirm in Freighter
+2. Click **"Fund Escrow"** → Confirm in Freighter
+3. State changes to "Funded"
 
-**Expected result:** State changes to **"Funded"**
+### Step D: Mark Shipped (Demo Seller)
+1. Enter tracking number (default: TRACK123)
+2. Click **"Ship as Demo Seller"**
+3. State changes to "Shipped"
 
----
-
-### Step 7: Mark Shipped (Seller Action)
-
-1. **Switch to Wallet B (Seller)** in Freighter
-2. Refresh the page and reconnect
-3. Load the same contract ID
-4. Enter tracking info in the "Tracking #" field
-5. Click **"Mark shipped"**
-6. Approve in Freighter
-
-**Expected result:** State changes to **"Shipped"**, Evidence shows tracking
-
----
-
-### Step 8: Confirm Delivery (Buyer Action)
-
-1. **Switch back to Wallet A (Buyer)** in Freighter
-2. Refresh and reconnect
-3. Load the contract
-4. Click **"Confirm delivery"**
-5. Approve in Freighter
-
-**Expected result:** 
-- State changes to **"Released"**
-- Funds transferred to seller's wallet
-
----
-
-## Testing via CLI (Alternative)
-
-If browser transactions fail with sequence errors, use the CLI:
-
-### Generate Test Keys
-```bash
-# Create buyer key
-stellar keys generate buyer --network testnet --fund
-
-# Create seller key  
-stellar keys generate seller --network testnet --fund
-
-# Get addresses
-stellar keys address buyer
-stellar keys address seller
-```
-
-### Full CLI Flow
-```bash
-# Set variables
-CONTRACT=CD5UVXKL72326LKWWVNBTRZZIPKGUESEEUE4ARUZMK53IKDSYKJBHOUK
-TOKEN=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
-BUYER=$(stellar keys address buyer)
-SELLER=$(stellar keys address seller)
-
-# 1. Create escrow
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- create --buyer $BUYER --seller $SELLER --amount 10000000 --token $TOKEN
-
-# 2. Check state (should be 0 = Created)
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- get_state
-
-# 3. Approve token spending
-stellar contract invoke --id $TOKEN --source buyer --network testnet-gateway \
-  -- approve --from $BUYER --spender $CONTRACT --amount 100000000 --expiration_ledger 1000000
-
-# 4. Fund escrow
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- fund
-
-# 5. Check state (should be 1 = Funded)
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- get_state
-
-# 6. Mark shipped (seller action)
-stellar contract invoke --id $CONTRACT --source seller --network testnet-gateway \
-  -- mark_shipped --evidence "TRACK-12345"
-
-# 7. Check state (should be 2 = Shipped)
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- get_state
-
-# 8. Confirm delivery (buyer action)
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- confirm_delivery
-
-# 9. Final state (should be 3 = Released)
-stellar contract invoke --id $CONTRACT --source buyer --network testnet-gateway \
-  -- get_state
-```
-
----
+### Step E: Confirm Delivery
+1. Click **"Confirm Delivery"** → Confirm in Freighter
+2. State changes to "Released"
+3. Funds transferred to seller!
 
 ## Escrow States
 
-| Value | Name | Description |
-|-------|------|-------------|
-| 0 | Created | Escrow created, awaiting funding |
-| 1 | Funded | Buyer has locked funds |
-| 2 | Shipped | Seller marked as shipped |
-| 3 | Released | Buyer confirmed, funds sent to seller |
+| State | Value | Description |
+|-------|-------|-------------|
+| Created | 0 | Escrow created, awaiting funding |
+| Funded | 1 | Buyer locked funds |
+| Shipped | 2 | Seller marked as shipped |
+| Released | 3 | Buyer confirmed, funds released |
 
----
+## Deploy Your Own Contract
+
+### 1. Build the contract
+```bash
+cd contracts/lumenswags
+cargo build --release --target wasm32v1-none
+```
+
+### 2. Deploy to testnet
+```bash
+# Add your key first (one-time)
+stellar keys generate mykey --network testnet
+
+# Deploy
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/lumenswags.wasm \
+  --source mykey \
+  --network testnet
+```
+
+### 3. Use the new contract ID in the UI
 
 ## Troubleshooting
 
-### "Sequence error" / "txBadSeq"
-- Wait 5 seconds between transactions
-- Don't click buttons multiple times
-- Refresh the page to reset state
+### "Sequence error"
+- Wait 5 seconds and retry
+- The UI auto-retries up to 3 times
+
+### "Demo seller doesn't match escrow"
+- You need to create a NEW escrow with the demo seller
+- Generate seller → Create escrow → then proceed
 
 ### "Not enough allowance"
-- The buyer must call `approve` on the token contract before funding
-- See Step 5 above
+- Click "Approve Tokens" before "Fund Escrow"
 
-### "Missing signing key"
-- Make sure the correct wallet is connected
-- Only the **buyer** can create/fund/confirm
-- Only the **seller** can mark shipped
+### Freighter not detected
+- Make sure extension is installed and enabled
+- Refresh the page
 
-### Contract shows "[object Object]"
-- This is a display bug - values need ScVal conversion
-- Use CLI to verify actual state: `stellar contract invoke --id <CONTRACT> -- get_state`
+## Token Contract (Testnet XLM)
 
----
+The UI uses the wrapped native XLM token on testnet:
+```
+CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
+```
 
 ## Architecture
 
 ```
-┌─────────────┐         ┌─────────────────┐         ┌─────────────┐
-│   BUYER     │         │  ESCROW CONTRACT │         │   SELLER    │
-│  (Wallet A) │         │                 │         │  (Wallet B) │
-└──────┬──────┘         └────────┬────────┘         └──────┬──────┘
-       │                         │                         │
-       │  1. create()            │                         │
-       │ ───────────────────────>│                         │
-       │                         │                         │
-       │  2. approve() on token  │                         │
-       │ ─────────────────────>  │                         │
-       │                         │                         │
-       │  3. fund()              │                         │
-       │ ───────────────────────>│  (tokens locked)        │
-       │                         │                         │
-       │                         │  4. mark_shipped()      │
-       │                         │<────────────────────────│
-       │                         │                         │
-       │  5. confirm_delivery()  │                         │
-       │ ───────────────────────>│  (tokens released) ────>│
-       │                         │                         │
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Freighter     │────▶│    Web UI       │────▶│  Soroban RPC    │
+│   (Buyer)       │     │   (Vite)        │     │  (Testnet)      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │                        │
+┌─────────────────┐            │                        ▼
+│  Demo Seller    │────────────┘                ┌─────────────────┐
+│  (Generated)    │                             │ Escrow Contract │
+└─────────────────┘                             └─────────────────┘
 ```
 
----
+## Files
 
-## Links
-
-- [Stellar Expert (Testnet)](https://stellar.expert/explorer/testnet)
-- [Stellar Laboratory](https://laboratory.stellar.org/)
-- [Freighter Wallet](https://www.freighter.app/)
-- [Soroban Docs](https://developers.stellar.org/docs/smart-contracts)
+- `web/index.html` - UI structure
+- `web/app.js` - Application logic
+- `web/styles.css` - Styling
+- `contracts/lumenswags/src/lib.rs` - Escrow contract

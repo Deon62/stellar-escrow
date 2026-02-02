@@ -94,45 +94,81 @@
           <div class="state-item"><span class="state-label">Evidence</span><span id="evidenceValue" class="state-value"></span></div>
         </div>
 
-        <!-- Two-column layout: Create (left) + Actions (right) -->
-        <div class="dashboard-columns">
-          <!-- Left: Create escrow -->
-          <div class="card create-card">
-            <h3>Create escrow</h3>
-            <p class="hint">Buyer creates. Enter seller, amount, token.</p>
-            <label for="sellerInput">Seller</label>
-            <input type="text" id="sellerInput" placeholder="G... address" />
-            <label for="amountInput">Amount (stroops)</label>
-            <input type="number" id="amountInput" placeholder="10000000" min="1" />
-            <label for="tokenInput">Token (auto-filled: testnet XLM)</label>
-            <input type="text" id="tokenInput" value="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" title="Testnet native XLM (wrapped)" />
-            <button type="button" id="createBtn" class="btn btn-primary btn-full">Create</button>
+        <!-- Step-by-step flow -->
+        <div class="flow-container">
+          <!-- Step A: Setup Demo Seller -->
+          <div class="flow-step" id="flowStep1">
+            <div class="flow-number">A</div>
+            <div class="flow-content">
+              <h4>Generate Demo Seller</h4>
+              <p class="flow-hint">Creates a funded testnet account to act as seller.</p>
+              <button type="button" id="generateSellerBtn" class="btn btn-secondary btn-full">Generate & Fund Seller</button>
+              <div class="seller-result" id="sellerResult" hidden>
+                <span class="label">Seller Address:</span>
+                <code id="demoSellerAddress" class="address-display">—</code>
+                <button type="button" id="copySellerBtn" class="btn btn-ghost btn-xs">Copy</button>
+              </div>
+            </div>
           </div>
 
-          <!-- Right: Actions -->
-          <div class="card actions-card" id="actionsCard">
-            <h3>Actions</h3>
-            <div class="action-row">
-            <div class="action-block">
-              <span class="action-label">1. Approve & Fund</span>
-              <p class="action-hint">Buyer approves token, then funds</p>
-              <button type="button" id="approveBtn" class="btn btn-secondary btn-full">Approve tokens</button>
-              <button type="button" id="fundBtn" class="btn btn-primary btn-full">Fund escrow</button>
+          <!-- Step B: Create Escrow -->
+          <div class="flow-step" id="flowStep2">
+            <div class="flow-number">B</div>
+            <div class="flow-content">
+              <h4>Create Escrow</h4>
+              <p class="flow-hint">You (buyer) create an escrow with the seller.</p>
+              <div class="form-row">
+                <label>Seller</label>
+                <input type="text" id="sellerInput" placeholder="Paste seller address from step A" />
+              </div>
+              <div class="form-row">
+                <label>Amount (stroops)</label>
+                <input type="number" id="amountInput" placeholder="1000" min="1" value="1000" />
+              </div>
+              <input type="hidden" id="tokenInput" value="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" />
+              <button type="button" id="createBtn" class="btn btn-primary btn-full">Create Escrow</button>
             </div>
-              <div class="action-block">
-                <span class="action-label">2. Ship</span>
-                <p class="action-hint">Seller marks shipped</p>
-                <input type="text" id="evidenceInput" placeholder="Tracking #" />
-                <button type="button" id="markShippedBtn" class="btn btn-primary btn-full">Mark shipped</button>
+          </div>
+
+          <!-- Step C: Approve & Fund -->
+          <div class="flow-step" id="flowStep3">
+            <div class="flow-number">C</div>
+            <div class="flow-content">
+              <h4>Approve & Fund</h4>
+              <p class="flow-hint">Approve token spending, then lock funds in escrow.</p>
+              <div class="btn-group">
+                <button type="button" id="approveBtn" class="btn btn-secondary">Approve Tokens</button>
+                <button type="button" id="fundBtn" class="btn btn-primary">Fund Escrow</button>
               </div>
-              <div class="action-block">
-                <span class="action-label">3. Confirm</span>
-                <p class="action-hint">Buyer releases funds</p>
-                <button type="button" id="confirmBtn" class="btn btn-success btn-full">Confirm delivery</button>
+            </div>
+          </div>
+
+          <!-- Step D: Ship -->
+          <div class="flow-step" id="flowStep4">
+            <div class="flow-number">D</div>
+            <div class="flow-content">
+              <h4>Mark Shipped (Seller)</h4>
+              <p class="flow-hint">Demo seller marks the item as shipped.</p>
+              <div class="form-row">
+                <input type="text" id="demoEvidenceInput" placeholder="Tracking # (e.g., TRACK123)" value="TRACK123" />
               </div>
+              <button type="button" id="demoShipBtn" class="btn btn-primary btn-full">Ship as Demo Seller</button>
+            </div>
+          </div>
+
+          <!-- Step E: Confirm -->
+          <div class="flow-step" id="flowStep5">
+            <div class="flow-number">E</div>
+            <div class="flow-content">
+              <h4>Confirm Delivery (Buyer)</h4>
+              <p class="flow-hint">You confirm receipt → funds released to seller!</p>
+              <button type="button" id="confirmBtn" class="btn btn-success btn-full">Confirm Delivery</button>
             </div>
           </div>
         </div>
+
+        <!-- Hidden: for wallet-based seller shipping -->
+        <input type="hidden" id="evidenceInput" value="Shipped" />
       </div>
     </section>
 

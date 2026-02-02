@@ -4,7 +4,7 @@
  */
 
 import { Server } from "@stellar/stellar-sdk/rpc";
-import { Contract, TransactionBuilder, StrKey, Account, Address, nativeToScVal, scValToNative } from "@stellar/stellar-sdk";
+import { Contract, TransactionBuilder, Keypair, StrKey, Account, Address, nativeToScVal, scValToNative } from "@stellar/stellar-sdk";
 
 const RPC_URL = "/rpc";
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
@@ -14,6 +14,7 @@ const STATE_NAMES = { 0: "Created", 1: "Funded", 2: "Shipped", 3: "Released" };
 let walletPublicKey = null;
 let contractId = null;
 let isInvoking = false;
+let demoSellerKeypair = null;
 
 // ——— Utilities ———
 
@@ -516,6 +517,152 @@ function goToDifferentContract() {
 
 // ——— Event Bindings ———
 
+// ——— Demo Seller (no Freighter needed) ———
+
+async function generateDemoSeller() {
+  const btn = document.getElementById("generateSellerBtn");
+  const addressEl = document.getElementById("demoSellerAddress");
+  const resultEl = document.getElementById("sellerResult");
+  const sellerInput = document.getElementById("sellerInput");
+  
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  
+  try {
+    // Generate new keypair
+    demoSellerKeypair = Keypair.random();
+    const publicKey = demoSellerKeypair.publicKey();
+    
+    // Show full address
+    addressEl.textContent = publicKey;
+    
+    // Fund via Friendbot
+    showMessage("Funding account via Friendbot...", "info");
+    const response = await fetch(`https://friendbot.stellar.org?addr=${publicKey}`);
+    
+    if (!response.ok) {
+      throw new Error("Friendbot funding failed");
+    }
+    
+    // Show result and auto-fill seller input
+    if (resultEl) resultEl.hidden = false;
+    if (sellerInput) sellerInput.value = publicKey;
+    
+    showMessage("Demo seller created & auto-filled! Now click Create Escrow.", "success");
+    btn.textContent = "Generated ✓";
+    
+  } catch (e) {
+    showMessage("Failed to create demo seller: " + e.message, "error");
+    btn.disabled = false;
+    btn.textContent = "Generate & Fund Seller";
+  }
+}
+
+function copySellerAddress() {
+  if (demoSellerKeypair) {
+    navigator.clipboard?.writeText(demoSellerKeypair.publicKey());
+    showMessage("Seller address copied!", "success");
+  }
+}
+
+async function demoSellerShip() {
+  if (!demoSellerKeypair) {
+    showMessage("Generate a demo seller first (Step A).", "error");
+    return;
+  }
+  
+  if (!contractId) {
+    showMessage("Load a contract first.", "error");
+    return;
+  }
+  
+  const evidence = document.getElementById("demoEvidenceInput")?.value?.trim() || "SHIPPED";
+  const sellerPubKey = demoSellerKeypair.publicKey();
+  
+  // Check if this keypair matches the escrow seller
+  const sellerInEscrow = document.getElementById("sellerValue")?.textContent?.trim();
+  if (sellerInEscrow && sellerInEscrow !== "—" && !sellerInEscrow.includes(sellerPubKey.slice(0,8))) {
+    showMessage(`Demo seller doesn't match escrow. Make sure you created the escrow with this seller.`, "error");
+    return;
+  }
+  
+  const btn = document.getElementById("demoShipBtn");
+  btn.disabled = true;
+  btn.textContent = "Shipping...";
+  
+  try {
+    const server = new Server(RPC_URL, { allowHttp: true });
+    const contract = new Contract(String(contractId));
+    
+    let account = await server.getAccount(sellerPubKey);
+    
+    const evidenceScVal = nativeToScVal(evidence, { type: "string" });
+    const op = contract.call("mark_shipped", evidenceScVal);
+    
+    const tx = new TransactionBuilder(account, { fee: "10000", networkPassphrase: NETWORK_PASSPHRASE })
+      .addOperation(op)
+      .setTimeout(180)
+      .build();
+    
+    const simulation = await server.simulateTransaction(tx);
+    if (simulation.error) throw new Error(simulation.error);
+    
+    // Re-fetch account for fresh sequence
+    account = await server.getAccount(sellerPubKey);
+    
+    const sorobanData = simulation.transactionData.build();
+    const totalFee = (10000 + Number(simulation.minResourceFee || 0)).toString();
+    const authEntries = simulation.result?.auth || [];
+    
+    const { Operation, xdr } = await import("@stellar/stellar-sdk");
+    const hostFunc = op.body().invokeHostFunctionOp().hostFunction();
+    const parsedAuth = authEntries.map(a => typeof a === 'string' ? xdr.SorobanAuthorizationEntry.fromXDR(a, 'base64') : a);
+    
+    const opWithAuth = Operation.invokeHostFunction({ func: hostFunc, auth: parsedAuth });
+    
+    const prepared = new TransactionBuilder(account, { fee: totalFee, networkPassphrase: NETWORK_PASSPHRASE })
+      .addOperation(opWithAuth)
+      .setTimeout(180)
+      .setSorobanData(sorobanData)
+      .build();
+    
+    // Sign with keypair directly (no Freighter)
+    prepared.sign(demoSellerKeypair);
+    
+    const sendResult = await server.sendTransaction(prepared);
+    
+    if (sendResult.status === "ERROR") {
+      throw new Error(sendResult.errorResult?.result?.()?.switch?.()?.name || "Transaction failed");
+    }
+    
+    if (sendResult.status === "PENDING") {
+      showMessage("Submitted, confirming...", "info");
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          const result = await server.getTransaction(sendResult.hash);
+          if (result.status === "SUCCESS") {
+            showMessage("Shipped! Now confirm delivery as buyer.", "success");
+            await loadEscrow();
+            btn.textContent = "Ship as Demo Seller";
+            btn.disabled = false;
+            return;
+          }
+          if (result.status === "FAILED") throw new Error("Transaction failed on-chain");
+        } catch {}
+      }
+    }
+    
+    showMessage("Shipped successfully!", "success");
+    await loadEscrow();
+  } catch (e) {
+    showMessage("Ship failed: " + e.message, "error");
+  } finally {
+    btn.textContent = "Ship as Demo Seller";
+    btn.disabled = false;
+  }
+}
+
 function init() {
   document.getElementById("connectBtn")?.addEventListener("click", connectWallet);
   document.getElementById("disconnectBtn")?.addEventListener("click", disconnectWallet);
@@ -528,6 +675,9 @@ function init() {
   document.getElementById("fundBtn")?.addEventListener("click", fundEscrow);
   document.getElementById("markShippedBtn")?.addEventListener("click", markShipped);
   document.getElementById("confirmBtn")?.addEventListener("click", confirmDelivery);
+  document.getElementById("generateSellerBtn")?.addEventListener("click", generateDemoSeller);
+  document.getElementById("demoShipBtn")?.addEventListener("click", demoSellerShip);
+  document.getElementById("copySellerBtn")?.addEventListener("click", copySellerAddress);
 }
 
 init();
